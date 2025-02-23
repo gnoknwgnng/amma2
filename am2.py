@@ -8,7 +8,7 @@ import base64
 import random
 
 # Configure Gemini API Key
-genai.configure(api_key="YOUR_GEMINI_API_KEY")
+genai.configure(api_key="AIzaSyCFA8FGd9mF42_4ExVYTqOsvOeCbyHzBFU")
 
 def extract_video_id(url):
     patterns = [
