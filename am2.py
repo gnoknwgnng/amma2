@@ -3,7 +3,6 @@ import google.generativeai as genai
 from youtube_transcript_api import YouTubeTranscriptApi, TranscriptsDisabled, NoTranscriptFound
 import re
 import base64
-import random
 
 # Configure Gemini API Key
 genai.configure(api_key="AIzaSyCFA8FGd9mF42_4ExVYTqOsvOeCbyHzBFU")
@@ -48,18 +47,15 @@ def generate_mcqs(text, num_questions=5, difficulty="medium"):
     for line in response.text.split("\n"):
         parts = line.split("|")
         if len(parts) == 6:
-            mcq_list.append({
-                "question": parts[0].strip(),
-                "options": [parts[1].strip(), parts[2].strip(), parts[3].strip(), parts[4].strip()],
-                "answer": int(parts[5].strip()) - 1  # Convert to 0-based index
-            })
+            try:
+                mcq_list.append({
+                    "question": parts[0].strip(),
+                    "options": [parts[1].strip(), parts[2].strip(), parts[3].strip(), parts[4].strip()],
+                    "answer": int(parts[5].strip()) - 1  # Convert to 0-based index
+                })
+            except ValueError:
+                pass  # Skip if answer is not a valid integer
     return mcq_list
-
-def generate_flashcards(text):
-    model = genai.GenerativeModel("gemini-pro")
-    prompt = f"Generate flashcards for revision from:\n{text}"
-    response = model.generate_content(prompt)
-    return response.text
 
 def create_download_link(data, filename, label):
     b64 = base64.b64encode(data.encode()).decode()
@@ -67,7 +63,7 @@ def create_download_link(data, filename, label):
     return href
 
 # -------------------- Streamlit UI --------------------
-st.title("YouTube AI Tutor")  # Removed emoji to fix UnicodeEncodeError
+st.title("YouTube AI Tutor")  
 st.write("Extract transcript, summarize, translate, generate MCQs, flashcards, and more!")
 
 video_url = st.text_input("Enter YouTube Video URL:")
@@ -116,7 +112,10 @@ if "mcqs" in st.session_state:
     for idx, mcq in enumerate(st.session_state["mcqs"]):
         st.write(f"**{idx+1}. {mcq['question']}**")
         selected_option = st.radio(f"Choose an answer:", mcq['options'], key=f"mcq_{idx}")
-        correct_answer = mcq["options"][mcq["answer"]]
+        
+        # Fixing the error: Ensure answer is an integer before indexing
+        correct_index = int(mcq["answer"])
+        correct_answer = mcq["options"][correct_index] if 0 <= correct_index < len(mcq["options"]) else None
 
         if selected_option:
             user_answers.append((selected_option, correct_answer))
@@ -127,30 +126,7 @@ if "mcqs" in st.session_state:
 
         download_links += create_download_link("\n".join([f"{q['question']} - Correct Answer: {q['options'][q['answer']]}" for q in st.session_state["mcqs"]]), "mcqs.txt", "Download MCQs")
 
-if st.button("Generate Flashcards"):
-    with st.spinner("Creating Flashcards..."):
-        flashcards = generate_flashcards(st.session_state["summary"])
-        st.session_state["flashcards"] = flashcards
-
-if "flashcards" in st.session_state:
-    st.subheader("🎓 Flashcards")
-    st.write(st.session_state["flashcards"].replace("\n", "\n\n"))
-    download_links += " | " + create_download_link(st.session_state["flashcards"], "flashcards.txt", "Download Flashcards")
-
 if download_links:
     st.markdown(download_links, unsafe_allow_html=True)
 
-st.write("🚀 AI-powered tutor that helps you learn faster!")
-
-
-
-
-
-
-
-
-
-
-
-        
-
+st.write("🚀 AI-powered tutor that helps you learn faster!")  
