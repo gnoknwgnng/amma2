@@ -41,9 +41,19 @@ def summarize_text(text, level="medium"):
 
 def generate_mcqs(text, num_questions=5, difficulty="medium"):
     model = genai.GenerativeModel("gemini-pro")
-    prompt = f"Generate {num_questions} MCQs with {difficulty} difficulty from:\n{text}\nProvide answers as JSON: [{'{"question": "", "options": ["", "", "", ""], "answer": ""}, ...'}]"
+    prompt = f"Generate {num_questions} MCQs with {difficulty} difficulty from:\n{text}. Format as: Question | Option1 | Option2 | Option3 | Option4 | CorrectOptionNumber"
     response = model.generate_content(prompt)
-    return response.text
+    
+    mcq_list = []
+    for line in response.text.split("\n"):
+        parts = line.split("|")
+        if len(parts) == 6:
+            mcq_list.append({
+                "question": parts[0].strip(),
+                "options": [parts[1].strip(), parts[2].strip(), parts[3].strip(), parts[4].strip()],
+                "answer": int(parts[5].strip()) - 1  # Convert to 0-based index
+            })
+    return mcq_list
 
 def generate_flashcards(text):
     model = genai.GenerativeModel("gemini-pro")
@@ -56,8 +66,9 @@ def create_download_link(data, filename, label):
     href = f'<a href="data:file/txt;base64,{b64}" download="{filename}">{label}</a>'
     return href
 
-st.title("\ud83d\udcda YouTube AI Tutor")
-st.write("Extract transcript, summarize, generate MCQs, flashcards, and more!")
+# -------------------- Streamlit UI --------------------
+st.title("YouTube AI Tutor")  # Removed emoji to fix UnicodeEncodeError
+st.write("Extract transcript, summarize, translate, generate MCQs, flashcards, and more!")
 
 video_url = st.text_input("Enter YouTube Video URL:")
 summary_level = st.radio("Summary detail:", ["short", "medium", "detailed"], index=1)
@@ -76,7 +87,7 @@ if st.button("Get Transcript"):
         st.warning("Invalid YouTube URL.")
 
 if "transcript" in st.session_state:
-    st.subheader("\ud83d\udcdd Extracted Transcript")
+    st.subheader("📜 Extracted Transcript")
     st.write(st.session_state["transcript"])
     download_links += create_download_link(st.session_state["transcript"], "transcript.txt", "Download Transcript") + " | "
     
@@ -86,34 +97,35 @@ if "transcript" in st.session_state:
             st.session_state["summary"] = summary
 
 if "summary" in st.session_state:
-    st.subheader("\ud83d\udcdd Summary")
+    st.subheader("📝 Summary")
     st.write(st.session_state["summary"])
     download_links += create_download_link(st.session_state["summary"], "summary.txt", "Download Summary") + " | "
     
     if st.button("Generate MCQs"):
         with st.spinner("Creating MCQs..."):
-            mcq_json = generate_mcqs(st.session_state["summary"], num_mcqs, difficulty)
-            st.session_state["mcqs"] = eval(mcq_json)
+            mcqs = generate_mcqs(st.session_state["summary"], num_mcqs, difficulty)
+            st.session_state["mcqs"] = mcqs
 
+# -------------------- Interactive MCQ Test --------------------
 if "mcqs" in st.session_state:
-    st.subheader("\u2705 Take the MCQ Test")
+    st.subheader("✅ Multiple Choice Questions")
+
     score = 0
     user_answers = []
-    
-    for i, mcq in enumerate(st.session_state["mcqs"]):
-        st.write(f"**{i+1}. {mcq['question']}**")
-        selected_option = st.radio(f"Question {i+1}", mcq['options'], key=f"q{i}")
-        user_answers.append((selected_option, mcq['answer']))
-    
+
+    for idx, mcq in enumerate(st.session_state["mcqs"]):
+        st.write(f"**{idx+1}. {mcq['question']}**")
+        selected_option = st.radio(f"Choose an answer:", mcq['options'], key=f"mcq_{idx}")
+        correct_answer = mcq["options"][mcq["answer"]]
+
+        if selected_option:
+            user_answers.append((selected_option, correct_answer))
+
     if st.button("Submit Answers"):
-        for user_ans, correct_ans in user_answers:
-            if user_ans == correct_ans:
-                score += 1
-        
-        st.success(f"You scored {score}/{len(st.session_state['mcqs'])}!")
-        st.write("### Correct Answers:")
-        for i, mcq in enumerate(st.session_state["mcqs"]):
-            st.write(f"{i+1}. {mcq['question']} **Answer:** {mcq['answer']}")
+        score = sum(1 for user_ans, correct_ans in user_answers if user_ans == correct_ans)
+        st.success(f"🎉 You scored {score} out of {len(st.session_state['mcqs'])}!")
+
+        download_links += create_download_link("\n".join([f"{q['question']} - Correct Answer: {q['options'][q['answer']]}" for q in st.session_state["mcqs"]]), "mcqs.txt", "Download MCQs")
 
 if st.button("Generate Flashcards"):
     with st.spinner("Creating Flashcards..."):
@@ -121,12 +133,24 @@ if st.button("Generate Flashcards"):
         st.session_state["flashcards"] = flashcards
 
 if "flashcards" in st.session_state:
-    st.subheader("\ud83c\udf93 Flashcards")
+    st.subheader("🎓 Flashcards")
     st.write(st.session_state["flashcards"].replace("\n", "\n\n"))
     download_links += " | " + create_download_link(st.session_state["flashcards"], "flashcards.txt", "Download Flashcards")
 
 if download_links:
     st.markdown(download_links, unsafe_allow_html=True)
 
-st.write("\ud83d\ude80 AI-powered tutor that helps you learn faster!")
+st.write("🚀 AI-powered tutor that helps you learn faster!")
+
+
+
+
+
+
+
+
+
+
+
+        
 
