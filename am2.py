@@ -2,8 +2,6 @@ import streamlit as st
 import google.generativeai as genai
 from youtube_transcript_api import YouTubeTranscriptApi, TranscriptsDisabled, NoTranscriptFound
 import re
-import time
-import pandas as pd
 import base64
 import random
 
@@ -43,7 +41,7 @@ def summarize_text(text, level="medium"):
 
 def generate_mcqs(text, num_questions=5, difficulty="medium"):
     model = genai.GenerativeModel("gemini-pro")
-    prompt = f"Generate {num_questions} MCQs with {difficulty} difficulty from:\n{text}"
+    prompt = f"Generate {num_questions} MCQs with {difficulty} difficulty from:\n{text}\nProvide answers as JSON: [{'{"question": "", "options": ["", "", "", ""], "answer": ""}, ...'}]"
     response = model.generate_content(prompt)
     return response.text
 
@@ -58,8 +56,8 @@ def create_download_link(data, filename, label):
     href = f'<a href="data:file/txt;base64,{b64}" download="{filename}">{label}</a>'
     return href
 
-st.title("📚 YouTube AI Tutor")
-st.write("Extract transcript, summarize, translate, generate MCQs, flashcards, and more!")
+st.title("\ud83d\udcda YouTube AI Tutor")
+st.write("Extract transcript, summarize, generate MCQs, flashcards, and more!")
 
 video_url = st.text_input("Enter YouTube Video URL:")
 summary_level = st.radio("Summary detail:", ["short", "medium", "detailed"], index=1)
@@ -78,7 +76,7 @@ if st.button("Get Transcript"):
         st.warning("Invalid YouTube URL.")
 
 if "transcript" in st.session_state:
-    st.subheader("📜 Extracted Transcript")
+    st.subheader("\ud83d\udcdd Extracted Transcript")
     st.write(st.session_state["transcript"])
     download_links += create_download_link(st.session_state["transcript"], "transcript.txt", "Download Transcript") + " | "
     
@@ -88,19 +86,34 @@ if "transcript" in st.session_state:
             st.session_state["summary"] = summary
 
 if "summary" in st.session_state:
-    st.subheader("📝 Summary")
+    st.subheader("\ud83d\udcdd Summary")
     st.write(st.session_state["summary"])
     download_links += create_download_link(st.session_state["summary"], "summary.txt", "Download Summary") + " | "
     
     if st.button("Generate MCQs"):
         with st.spinner("Creating MCQs..."):
-            mcq_text = generate_mcqs(st.session_state["summary"], num_mcqs, difficulty)
-            st.session_state["mcqs"] = mcq_text
+            mcq_json = generate_mcqs(st.session_state["summary"], num_mcqs, difficulty)
+            st.session_state["mcqs"] = eval(mcq_json)
 
 if "mcqs" in st.session_state:
-    st.subheader("✅ Multiple Choice Questions")
-    st.write(st.session_state["mcqs"].replace("\n", "\n\n"))
-    download_links += create_download_link(st.session_state["mcqs"], "mcqs.txt", "Download MCQs")
+    st.subheader("\u2705 Take the MCQ Test")
+    score = 0
+    user_answers = []
+    
+    for i, mcq in enumerate(st.session_state["mcqs"]):
+        st.write(f"**{i+1}. {mcq['question']}**")
+        selected_option = st.radio(f"Question {i+1}", mcq['options'], key=f"q{i}")
+        user_answers.append((selected_option, mcq['answer']))
+    
+    if st.button("Submit Answers"):
+        for user_ans, correct_ans in user_answers:
+            if user_ans == correct_ans:
+                score += 1
+        
+        st.success(f"You scored {score}/{len(st.session_state['mcqs'])}!")
+        st.write("### Correct Answers:")
+        for i, mcq in enumerate(st.session_state["mcqs"]):
+            st.write(f"{i+1}. {mcq['question']} **Answer:** {mcq['answer']}")
 
 if st.button("Generate Flashcards"):
     with st.spinner("Creating Flashcards..."):
@@ -108,11 +121,12 @@ if st.button("Generate Flashcards"):
         st.session_state["flashcards"] = flashcards
 
 if "flashcards" in st.session_state:
-    st.subheader("🎓 Flashcards")
+    st.subheader("\ud83c\udf93 Flashcards")
     st.write(st.session_state["flashcards"].replace("\n", "\n\n"))
     download_links += " | " + create_download_link(st.session_state["flashcards"], "flashcards.txt", "Download Flashcards")
 
 if download_links:
     st.markdown(download_links, unsafe_allow_html=True)
 
-st.write("🚀 AI-powered tutor that helps you learn faster!")
+st.write("\ud83d\ude80 AI-powered tutor that helps you learn faster!")
+
