@@ -8,6 +8,9 @@ import base64
 genai.configure(api_key="AIzaSyCFA8FGd9mF42_4ExVYTqOsvOeCbyHzBFU")
 
 def extract_video_id(url):
+    """
+    Extract the video ID from a YouTube URL.
+    """
     patterns = [
         r"(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]{11})",
         r"(?:https?:\/\/)?(?:www\.)?youtube\.com\/embed\/([\w-]{11})"
@@ -19,6 +22,9 @@ def extract_video_id(url):
     return None
 
 def get_youtube_transcript(video_id):
+    """
+    Fetch the transcript of a YouTube video using its video ID.
+    """
     try:
         transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
         if 'en' in [t.language_code for t in transcript_list]:
@@ -33,35 +39,87 @@ def get_youtube_transcript(video_id):
         return f"Error: {str(e)}"
 
 def summarize_text(text, level="medium"):
-    model = genai.GenerativeModel("gemini-pro")
-    prompt = f"Summarize in {level} detail:\n\n{text}"
-    response = model.generate_content(prompt)
-    return response.text
+    """
+    Summarize the given text using the Gemini API.
+    """
+    try:
+        model = genai.GenerativeModel("gemini-pro")
+        prompt = f"Summarize in {level} detail:\n\n{text}"
+        response = model.generate_content(prompt)
+        return response.text
+    except Exception as e:
+        st.error(f"Error summarizing text: {str(e)}")
+        return "Summary generation failed."
 
 def generate_mcqs(text, num_questions=5, difficulty="medium"):
-    model = genai.GenerativeModel("gemini-pro")
-    prompt = f"Generate {num_questions} multiple-choice questions (MCQs) with {difficulty} difficulty from the following text. Each MCQ should be formatted as: \nQuestion: <question text>\nA) <option1>\nB) <option2>\nC) <option3>\nD) <option4>\nAnswer: <correct option letter>\n\n{text}"
-    response = model.generate_content(prompt)
+    """
+    Generate multiple-choice questions (MCQs) from the given text using the Gemini API.
+    """
+    if len(text.split()) < 50:  # Ensure the input text is sufficiently long
+        st.warning("The input text is too short to generate meaningful MCQs.")
+        return []
+
+    try:
+        model = genai.GenerativeModel("gemini-pro")
+        prompt = (
+            f"Generate {num_questions} multiple-choice questions (MCQs) with {difficulty} difficulty "
+            f"from the following text. Each MCQ should be formatted as:\n"
+            f"Question: <question text>\n"
+            f"A) <option1>\n"
+            f"B) <option2>\n"
+            f"C) <option3>\n"
+            f"D) <option4>\n"
+            f"Answer: <correct option letter>\n\n"
+            f"{text}"
+        )
+        response = model.generate_content(prompt)
+        
+        # Log the raw API response for debugging
+        print("Raw API Response:", response.text)
+        
+        mcq_list = []
+        mcq_blocks = response.text.strip().split("\n\n")  # Split into individual MCQs
+        
+        for block in mcq_blocks:
+            lines = block.split("\n")
+            if len(lines) >= 6:  # Ensure the block has at least 6 lines (question, 4 options, answer)
+                # Extract question
+                question = lines[0].replace("Question: ", "").strip()
+                
+                # Extract options (A, B, C, D)
+                options = []
+                for i in range(1, 5):
+                    if i < len(lines):
+                        option = lines[i].strip()
+                        if option.startswith(("A)", "B)", "C)", "D)")):
+                            options.append(option[3:].strip())
+                
+                # Extract correct answer
+                correct_option = None
+                if len(lines) >= 6:
+                    answer_line = lines[5].strip()
+                    if answer_line.startswith("Answer:"):
+                        correct_option = answer_line.replace("Answer:", "").strip()
+                
+                # Validate and add MCQ to the list
+                if question and len(options) == 4 and correct_option in ["A", "B", "C", "D"]:
+                    answer_index = {"A": 0, "B": 1, "C": 2, "D": 3}[correct_option]
+                    mcq_list.append({
+                        "question": question,
+                        "options": options,
+                        "answer": answer_index
+                    })
+        
+        return mcq_list
     
-    mcq_list = []
-    mcq_blocks = response.text.strip().split("\n\n")
-    for block in mcq_blocks:
-        lines = block.split("\n")
-        if len(lines) >= 6:
-            question = lines[0].replace("Question: ", "").strip()
-            options = [lines[1][3:].strip(), lines[2][3:].strip(), lines[3][3:].strip(), lines[4][3:].strip()]
-            correct_option = lines[5].replace("Answer: ", "").strip()
-            answer_index = {"A": 0, "B": 1, "C": 2, "D": 3}.get(correct_option, -1)
-            
-            if answer_index != -1:
-                mcq_list.append({
-                    "question": question,
-                    "options": options,
-                    "answer": answer_index
-                })
-    return mcq_list
+    except Exception as e:
+        st.error(f"Error generating MCQs: {str(e)}")
+        return []
 
 def create_download_link(data, filename, label):
+    """
+    Create a downloadable link for the given data.
+    """
     b64 = base64.b64encode(data.encode()).decode()
     href = f'<a href="data:file/txt;base64,{b64}" download="{filename}">{label}</a>'
     return href
@@ -82,7 +140,10 @@ if st.button("Get Transcript"):
     if video_id:
         with st.spinner("Fetching transcript..."):
             transcript = get_youtube_transcript(video_id)
-            st.session_state["transcript"] = transcript
+            if "Error" in transcript:
+                st.error(transcript)
+            else:
+                st.session_state["transcript"] = transcript
     else:
         st.warning("Invalid YouTube URL.")
 
