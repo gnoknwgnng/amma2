@@ -1,6 +1,3 @@
-
-
-
 import streamlit as st
 import google.generativeai as genai
 from youtube_transcript_api import YouTubeTranscriptApi, TranscriptsDisabled, NoTranscriptFound
@@ -43,21 +40,25 @@ def summarize_text(text, level="medium"):
 
 def generate_mcqs(text, num_questions=5, difficulty="medium"):
     model = genai.GenerativeModel("gemini-pro")
-    prompt = f"Generate {num_questions} MCQs with {difficulty} difficulty from:\n{text}. Format as: Question | Option1 | Option2 | Option3 | Option4 | CorrectOptionNumber"
+    prompt = f"Generate {num_questions} multiple-choice questions (MCQs) with {difficulty} difficulty from the following text. Each MCQ should be formatted as: \nQuestion: <question text>\nA) <option1>\nB) <option2>\nC) <option3>\nD) <option4>\nAnswer: <correct option letter>\n\n{text}"
     response = model.generate_content(prompt)
     
     mcq_list = []
-    for line in response.text.split("\n"):
-        parts = line.split("|")
-        if len(parts) == 6:
-            try:
+    mcq_blocks = response.text.strip().split("\n\n")
+    for block in mcq_blocks:
+        lines = block.split("\n")
+        if len(lines) >= 6:
+            question = lines[0].replace("Question: ", "").strip()
+            options = [lines[1][3:].strip(), lines[2][3:].strip(), lines[3][3:].strip(), lines[4][3:].strip()]
+            correct_option = lines[5].replace("Answer: ", "").strip()
+            answer_index = {"A": 0, "B": 1, "C": 2, "D": 3}.get(correct_option, -1)
+            
+            if answer_index != -1:
                 mcq_list.append({
-                    "question": parts[0].strip(),
-                    "options": [parts[1].strip(), parts[2].strip(), parts[3].strip(), parts[4].strip()],
-                    "answer": int(parts[5].strip()) - 1  # Convert to 0-based index
+                    "question": question,
+                    "options": options,
+                    "answer": answer_index
                 })
-            except ValueError:
-                pass  # Skip if answer is not a valid integer
     return mcq_list
 
 def create_download_link(data, filename, label):
@@ -116,9 +117,8 @@ if "mcqs" in st.session_state:
         st.write(f"**{idx+1}. {mcq['question']}**")
         selected_option = st.radio(f"Choose an answer:", mcq['options'], key=f"mcq_{idx}")
         
-        # Fixing the error: Ensure answer is an integer before indexing
         correct_index = int(mcq["answer"])
-        correct_answer = mcq["options"][correct_index] if 0 <= correct_index < len(mcq["options"]) else None
+        correct_answer = mcq["options"][correct_index] if 0 <= correct_index < len(mcq["options"] else None
 
         if selected_option:
             user_answers.append((selected_option, correct_answer))
@@ -132,4 +132,4 @@ if "mcqs" in st.session_state:
 if download_links:
     st.markdown(download_links, unsafe_allow_html=True)
 
-st.write("🚀 AI-powered tutor that helps you learn faster!")  
+st.write("🚀 AI-powered tutor that helps you learn faster!")
