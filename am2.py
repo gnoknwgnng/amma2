@@ -118,7 +118,7 @@ if "mcqs" in st.session_state:
         selected_option = st.radio(f"Choose an answer:", mcq['options'], key=f"mcq_{idx}")
         
         correct_index = int(mcq["answer"])
-        correct_answer = mcq["options"][correct_index] if 0 <= correct_index < len(mcq["options"] else None
+        correct_answer = mcq["options"][correct_index] if 0 <= correct_index < len(mcq["options"]) else None
 
         if selected_option:
             user_answers.append((selected_option, correct_answer))
